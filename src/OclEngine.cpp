@@ -5,6 +5,7 @@
 #include <string>
 #include <regex>
 #include "OclEngine.hpp"
+#include "OclErrorHelper.hpp"
 
 // -------------------------------------------------------------------------------
 OclEngine::OclEngine(int platformNr, int deviceNr) {
@@ -80,59 +81,103 @@ void OclEngine::clinfo(std::ostream &info) {
 }
 // -------------------------------------------------------------------------------
 int OclEngine::RunBench1(const std::string& function, const int size, const int repeats) {
-	auto prg = CreateProgram();
+	try {
+		auto prg = CreateProgram();
 
-	AllocBuffers(size);
+		AllocBuffers(size);
 
-	unsigned long mSIZE = size * (int) pow(2, 20);
-	unsigned long mCOUNT = mSIZE / sizeof(cl_int4);
+		unsigned long mSIZE = size * (int) pow(2, 20);
+		unsigned long mCOUNT = mSIZE / sizeof(cl_int4);
 
-	std::cout << "Running Bench test on:" << device.getInfo<CL_DEVICE_NAME>() << std::endl;
-	cl::Kernel kernel(prg, function.c_str());
-	cl::CommandQueue queue(context, device, CL_QUEUE_PROFILING_ENABLE);
-	int nr = 0;
-	int memStart=0;
-	for (auto &buffer : buffers) { // buffers loop
-		kernel.setArg(0, buffer);
-		cl_int liczba;
-		// warmup
-		std::cout << "Chunk: " << std::setw(3) << nr ;
-		std::cout << " (" << std::setw(4) << memStart << "-"  << std::setw(4) << (memStart + size) << ")MB";
-		memStart += size;
-		cl::Event myEvent;
-		queue.enqueueNDRangeKernel(kernel, cl::NDRange(0), cl::NDRange(mCOUNT));
+		std::cout << "Running Bench test on:" << device.getInfo<CL_DEVICE_NAME>() << std::endl;
 
-		double tick2 = 0;
-		for (int i = 0; i < repeats; i++) { // repeat loop (for each buffer)
-			queue.enqueueNDRangeKernel(kernel, cl::NDRange(0), cl::NDRange(mCOUNT), cl::NullRange, NULL, &myEvent);
-			myEvent.wait();
-			tick2 += (myEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>()
-					- myEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>());
+		cl::Kernel kernel(prg, function.c_str());
+		cl::CommandQueue queue(context, device, CL_QUEUE_PROFILING_ENABLE);
+
+		int nr = 0;
+		int memStart=0;
+		for (auto &buffer : buffers) { // buffers loop
+			try {
+				kernel.setArg(0, buffer);
+				cl_int liczba;
+				// warmup
+				std::cout << "Chunk: " << std::setw(3) << nr ;
+				std::cout << " (" << std::setw(4) << memStart << "-"  << std::setw(4) << (memStart + size) << ")MB";
+				memStart += size;
+				cl::Event myEvent;
+				queue.enqueueNDRangeKernel(kernel, cl::NDRange(0), cl::NDRange(mCOUNT));
+
+				double tick2 = 0;
+				for (int i = 0; i < repeats; i++) { // repeat loop (for each buffer)
+					queue.enqueueNDRangeKernel(kernel, cl::NDRange(0), cl::NDRange(mCOUNT), cl::NullRange, NULL, &myEvent);
+					myEvent.wait();
+					tick2 += (myEvent.getProfilingInfo<CL_PROFILING_COMMAND_END>()
+							- myEvent.getProfilingInfo<CL_PROFILING_COMMAND_START>());
+				}
+				queue.enqueueReadBuffer(buffer, CL_BLOCKING, 0, sizeof(liczba), &liczba);
+				tick2 = tick2 / pow(10, 6) / repeats;
+				std::cout << " Speed: " << std::fixed << std::setprecision(2) << mSIZE / tick2 / pow(2, 20) << " GByte/s ";
+				std::cout << (liczba == 125 ? "OK" : "FALSE") << std::endl;
+				nr++;
+			} catch (const cl::Error &e) {
+				std::cerr << "\n\nError occurred while processing chunk " << nr << ":" << std::endl;
+				std::cerr << "  Error Code: " << e.err() << std::endl;
+				std::cerr << "  Error Name: " << getOpenCLErrorString(e.err()) << std::endl;
+				std::cerr << "  Description: " << e.what() << std::endl;
+
+				std::string help = getOpenCLErrorHelp(e.err());
+				if (!help.empty()) {
+					std::cerr << "\n  " << help << std::endl;
+				}
+
+				// Re-throw to be caught by main
+				throw;
+			}
 		}
-		queue.enqueueReadBuffer(buffer, CL_BLOCKING, 0, sizeof(liczba), &liczba);
-		tick2 = tick2 / pow(10, 6) / repeats;
-		std::cout << " Speed: " << std::fixed << std::setprecision(2) << mSIZE / tick2 / pow(2, 20) << " GByte/s ";
-		std::cout << (liczba == 125 ? "OK" : "FALSE") << std::endl;
-		nr++;
+		queue.finish();
+		return 0;
+	} catch (const cl::Error &e) {
+		// Add context about where the error occurred
+		std::cerr << "\nError context: Failed during benchmark execution" << std::endl;
+		throw; // Re-throw to be handled by main
 	}
-	queue.finish();
-	return 0;
 }
 // -------------------------------------------------------------------------------
 size_t OclEngine::AllocBuffers(int chunkSize) {
 	unsigned long mSIZE = chunkSize * (int)pow(2,20);
 	cl_ulong mGlobalMemSize = device.getInfo<CL_DEVICE_GLOBAL_MEM_SIZE>();
+
+	std::cout << "Allocating memory buffers (chunk size: " << chunkSize << " MB)..." << std::endl;
+
 	for (unsigned int i = 0; i < mGlobalMemSize / (mSIZE - 1); i++) {
-//		std::cout << "Allocating chunk: " << std::setw(3) << i;
-		cl::Buffer memBuf(context, 0, mSIZE);
-		size_t check = memBuf.getInfo<CL_MEM_SIZE>();
-		if (check != 0) {
-			buffers.push_back(memBuf);
-//			std::cout << " ok: " << check << " bytes" << std::endl;
-		} else {
-			std::cout << "Problem !!!" << std::endl;
+		try {
+			cl::Buffer memBuf(context, 0, mSIZE);
+			size_t check = memBuf.getInfo<CL_MEM_SIZE>();
+			if (check != 0) {
+				buffers.push_back(memBuf);
+			} else {
+				std::cerr << "Warning: Failed to allocate chunk " << i << " (got 0 size)" << std::endl;
+				break; // Stop trying to allocate more
+			}
+		} catch (const cl::Error &e) {
+			// This is expected when we run out of memory, so don't print scary error
+			if (e.err() == -4 || e.err() == -61) { // CL_MEM_OBJECT_ALLOCATION_FAILURE or CL_INVALID_BUFFER_SIZE
+				// Stop allocating silently
+				break;
+			} else {
+				// Unexpected error, report it
+				std::cerr << "\nUnexpected error during buffer allocation:" << std::endl;
+				std::cerr << "  Error Code: " << e.err() << std::endl;
+				std::cerr << "  Error Name: " << getOpenCLErrorString(e.err()) << std::endl;
+				throw; // Re-throw unexpected errors
+			}
 		}
 	}
+
+	if (buffers.size() == 0) {
+		throw std::runtime_error("Failed to allocate any memory buffers. Try reducing chunk size with -s parameter.");
+	}
+
 	std::cout << "allocated " << buffers.size() * mSIZE << " bytes " << std::fixed << std::setprecision(2)
 			<< (buffers.size() * mSIZE) / pow(2, 30) << " GB" << std::endl;
 	return buffers.size();
@@ -154,7 +199,17 @@ __kernel void membench_write(__global int4 *dst){
 	cl::Program prg(context, sources);
 
 	auto err = prg.build("-cl-std=CL1.2");
-	if (err)
-		std::cout << "error:" << err << " info:" << prg.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+	if (err) {
+		std::cerr << "\n========================================" << std::endl;
+		std::cerr << "OpenCL Program Build Failed!" << std::endl;
+		std::cerr << "========================================" << std::endl;
+		std::cerr << "Error Code: " << err << std::endl;
+		std::cerr << "Error Name: " << getOpenCLErrorString(err) << std::endl;
+		std::cerr << "\nBuild Log:\n" << prg.getBuildInfo<CL_PROGRAM_BUILD_LOG>(device) << std::endl;
+		std::cerr << "========================================" << std::endl;
+
+		// Throw an error to be caught by main
+		throw cl::Error(err, "Failed to build OpenCL program");
+	}
 	return prg;
 }
