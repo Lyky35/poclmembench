@@ -13,10 +13,16 @@ Project inspired by delphi OclMemBench by duzenko [https://github.com/duzenko/Op
 
 ## Install
 
-Standalone **executables** for _Linux_, _macOS_ and _Windows_ are provided in
-the [Releases](https://github.com/kruzer/poclmembench/releases) section.
-Download an archive for your operating system and unpack the content to a place
-accessible from command line. 
+Standalone **executables** are provided in the [`bin/`](bin) directory:
+
+| File | Platform |
+| ---- | -------- |
+| `bin/poclmembench-linux-x86_64` | Linux |
+| `bin/poclmembench-windows-x86_64.exe` | Windows |
+
+Download the executable for your operating system and copy it to a place
+accessible from command line, or build it from source for other platforms
+(see **Build** below).
 
 ## Usage
 
@@ -29,9 +35,31 @@ For a full list of available command, please run
 poclmembench --help
 ```
 
+The process exits with status `0` when all chunks passed their checks and
+with a non zero status when `FAILED` was reported, so it can be used
+directly in scripts and CI.
+
+## Verification
+
+Every chunk is checked after it has been benchmarked:
+
+*	**CRC** - the whole chunk is read back and its CRC-32 is compared with the expected value
+*	**artifacts** - every 32 bit word must contain the value written by the kernel, anything else is reported with its count and position
+*	**errors** - every OpenCL call (program build, kernel enqueue, event wait, profiling, read back, queue finish) must return `CL_SUCCESS`, the failing call and error code are printed
+
+A passing chunk ends with `OK`, a failing one with `FAILED`, and the run
+finishes with an overall `RESULT` line:
+
+```
+Chunk:   0 (   0- 128)MB Speed: 90.39 GByte/s crc:0x12eb2da6 OK
+Chunk:   1 ( 128- 256)MB Speed: 90.35 GByte/s crc:0x05ec52d1 artifacts:2(first@1234) crc_mismatch(expected:0x12eb2da6) FAILED
+RESULT: FAILED (1/2 chunks with crc/error/artifact problems)
+```
+
 ## Build
 
-This project uses [CMake].
+This project uses [CMake] and needs a C++11 compiler, Boost (*program_options*)
+and the OpenCL headers/loader.
 
 1. Create a build directory.
 
