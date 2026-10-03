@@ -13,14 +13,15 @@ Project inspired by delphi OclMemBench by duzenko [https://github.com/duzenko/Op
 
 ## Install
 
-Standalone **executables** are provided in the [`bin/`](bin) directory:
+Standalone **executables** are provided in the
+[Releases](https://github.com/Lyky35/poclmembench/releases) section:
 
-| File | Platform |
-| ---- | -------- |
-| `bin/poclmembench-linux-x86_64` | Linux |
-| `bin/poclmembench-windows-x86_64.exe` | Windows |
+| Archive | Platform |
+| ------- | -------- |
+| `poclmembench_lin_0_92.tar.gz` | Linux |
+| `poclmembench_win_0_92.zip` | Windows |
 
-Download the executable for your operating system and copy it to a place
+Download an archive for your operating system and unpack the content to a place
 accessible from command line, or build it from source for other platforms
 (see **Build** below).
 
