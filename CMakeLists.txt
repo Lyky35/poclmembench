@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.7)
 project(poclmembench)
 
 set (poclmembench_VERSION_MAJOR 0)
-set (poclmembench_VERSION_MINOR 91)
+set (poclmembench_VERSION_MINOR 92)
  
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
