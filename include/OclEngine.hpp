@@ -11,6 +11,8 @@ class OclEngine {
 	cl::Device device;
 	cl::Context context;
 	std::vector<cl::Buffer> buffers;
+	bool checksFailed;
+	size_t allocErrors;
 
 public:
 	/**
@@ -34,7 +36,23 @@ public:
 	void clinfo(std::ostream &os);
 
 	cl::Program CreateProgram();
+
+	/**
+	 * Run the memory benchmark. Every chunk is verified afterwards with a
+	 * CRC check, an OpenCL error check and an artifact scan of the content.
+	 * @param function kernel to run
+	 * @param size chunk size in MB
+	 * @param repeats number of timed kernel runs per chunk
+	 * @return 0 when all chunks passed, 1 when FAILED was reported
+	 */
 	int RunBench1(const std::string &function, const int size, const int repeats);
+
+	/**
+	 * @return true when the last run finished without crc/error/artifact failures
+	 */
+	bool allChecksPassed() const {
+		return !checksFailed;
+	}
 
 	size_t AllocBuffers(const int chunkSize);
 
