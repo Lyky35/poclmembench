@@ -18,8 +18,8 @@ Standalone **executables** are provided in the
 
 | Archive | Platform |
 | ------- | -------- |
-| `poclmembench_lin_0_92.tar.gz` | Linux |
-| `poclmembench_win_0_92.zip` | Windows |
+| `poclmembench_lin_0_93.tar.gz` | Linux |
+| `poclmembench_win_0_93.zip` | Windows |
 
 Download an archive for your operating system and unpack the content to a place
 accessible from command line, or build it from source for other platforms
